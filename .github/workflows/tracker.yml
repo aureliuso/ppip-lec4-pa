@@ -1,0 +1,38 @@
+name: GitHub Projects Automation
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  move-issue-to-done:
+    runs-on: ubuntu-latest
+    # Only run if the PR was merged (not just closed without merging)
+    if: github.event.pull_request.merged == true
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Find the issue linked with "Closes #N" and mark it Done
+      - name: Move linked issue to Done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          ISSUE=$(echo "$PR_BODY" | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' | grep -oE '[0-9]+' | head -n1)
+          if [ -z "$ISSUE" ]; then
+            echo "No linked issue found in the PR description."
+            exit 0
+          fi
+          gh label create done --color 0E8A16 --description "Completed via merged PR" --force
+          gh issue edit "$ISSUE" --add-label "done"
+          gh issue comment "$ISSUE" --body "Moved to Done: PR #$PR_NUMBER was merged by ${{ github.actor }}."
+          echo "Issue #$ISSUE marked as Done."
